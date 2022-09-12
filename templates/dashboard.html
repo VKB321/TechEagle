@@ -1,0 +1,169 @@
+
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html lang="en" dir="ltr">
+
+<head>
+    <title>Skyhawk Flight Instruments Dashboard</title>
+    <script src="js/jquery-1.11.3.js"></script>
+    <script src="js/d3.min.js"></script>
+    <script src="js/jquery.flightindicators.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/flightindicators.css" />
+    <script src="js/bootstrap.min.js"></script>    
+    <link rel="stylesheet" href="css/bootstrap.min.css" />
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css"
+    integrity="sha512-hoalWLoI8r4UszCkZ5kL8vayOGVae1oxXe/2A4AO6J9+580uKHDO3JdHb7NzwwzK5xr/Fs0W40kiNHxM9vyTtQ=="
+    crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"
+integrity="sha512-BB3hKbKWOc9Ez/TAwyWxNXeoV9c1v6FIeYiBieIWkpLjauysF18NzgR1MBNBXf8/KABdlkX68nAhlwcDFLGPCQ=="
+crossorigin=""></script>
+<style>
+    body {
+            text-align: center;
+        }
+#map { 
+    float: right;
+    width: 70vw;
+    height: 60vh; 
+}
+.det{
+    background-color: rgb(152, 240, 240);
+    height: 60vh; 
+    width: 70vw;
+    font-size: larger;
+  
+}
+
+</style>
+
+    
+</head>
+
+<body>
+
+    <div id="map"></div>
+    <div class="det">
+      
+        <p ><b>Longitude: </b><span id="lon"></span></p>
+            <p><b>Latitude: </b><span id="lat"></span></p> 
+        <p><b>Altitude: </b><span id="altitude"></span></p> 
+    <p> <b>Roll: </b><span id="roll"></span></p>
+    </div>
+    <div class="instruments"> 
+        <div class="instrument" id="altimeter"></div>            
+        <div class="instrument" id="turn_coordinator"></div>
+        <div class="instrument" id="heading"></div>
+</div>
+
+    <script type="text/javascript">
+var map = L.map('map').setView([0,0], 1); //[latitude,longitude, zoomlevel]
+// const myIcon = L.icon({
+//     iconUrl: '1.png',
+//     iconSize: [12, 12],
+//     iconAnchor: [22, 94],   
+// });
+
+let marker = L.marker([0,0]).addTo(map)
+// let marker = L.marker([0,0],{icon: myIcon}).addTo(map)
+
+const attribute = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+const tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const tiles = L.tileLayer(tileUrl,{attribute})
+tiles.addTo(map)
+let i = 0
+var data;
+   
+    async function getIss() {
+        const response = await fetch("https://api.wheretheiss.at/v1/satellites/25544")
+       data = await response.json();
+    //    console.log(data.latitude,"hello",i)
+        marker.setLatLng([data.latitude,data.longitude])
+        document.getElementById('lat').textContent = data.latitude
+        document.getElementById('lon').textContent = data.longitude
+         document.getElementById('altitude').textContent = data.altitude
+         document.getElementById('roll').textContent = 30*Math.sin(data.altitude/10)
+         if(i<125  ){
+            // console.log(i)
+            i++
+            getIss()
+           
+         }
+
+    }
+    
+    getIss()
+    
+
+
+
+
+// above code belongs to map
+
+
+        var settings = {
+            off_flag: true,
+            size: 300,
+            showBox: false,
+            showScrews: true
+        };
+
+        var increment = 0;
+        var increment_vario = 0;
+        var ball_increment = 0.5;
+        var ball_right = true;
+        var clockwise_vario = true;
+
+        var airspeed = $.flightIndicator('#airspeed', 'airspeed', settings);
+        var attitude = $.flightIndicator('#attitude', 'attitude', settings);
+        var altimeter = $.flightIndicator('#altimeter', 'altimeter', settings);
+        var turn_coordinator = $.flightIndicator('#turn_coordinator', 'turn_coordinator', settings);
+        var heading = $.flightIndicator('#heading', 'heading', settings);
+        var variometer = $.flightIndicator('#variometer', 'variometer', settings);
+
+        setInterval(function() {
+
+            // Airspeed update
+            //airspeed.setAirSpeed(80 * Math.sin(increment/10));
+            airspeed.setAirSpeed(data.altitude);
+
+            // Attitude update
+            attitude.setRoll(30*Math.sin(data.altitude/10));
+            attitude.setPitch(50*Math.sin(data.altitude/20));
+            attitude.setILSLocalizer(15*Math.sin(data.altitude/30));
+            attitude.setILSGlideslope(20*Math.sin(data.altitude/30));
+
+            // Altimeter update
+            altimeter.setAltitude(10*data.altitude);
+            altimeter.setPressure(30+3*Math.sin(data.altitude/50)/10);
+            increment++;
+            
+            // TC update - note that the TC appears opposite the angle of the attitude indicator, as it mirrors the actual wing up/down position
+            turn_coordinator.setTurn((30*Math.sin(data.altitude/10))*-1);
+            turn_coordinator.setSlip(ball_increment);
+            if (ball_increment <= 0) ball_right = true;
+            if (ball_increment >= 1) ball_right = false;
+            if (ball_right == false) ball_increment -= 0.01;
+            else ball_increment += 0.01;
+            // Heading update
+            heading.setHeading(data.altitude);
+            heading.setBeaconOne(data.altitude * 0.5, true);
+            heading.setBeaconTwo(-data.altitude * 0.75, true);
+            
+            // Vario update
+            if (increment_vario > 45) clockwise_vario = false;
+            if (increment_vario < - 45) clockwise_vario = true;
+
+            if (clockwise_vario) increment_vario += 0.3;
+            else increment_vario -= 0.3;
+
+            variometer.setVario(increment_vario);
+
+        }, 50);
+
+
+    </script>
+
+</body>
+
+</html>
